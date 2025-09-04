@@ -1,0 +1,509 @@
+---
+title: "From Consumers to Creators:"
+author: "Natasha "
+date: "2025-01-08"
+output: html_document
+---
+
+***********************************************************
+************************************
+
+
+Pre and Post Survey 
+
+
+****************************************************
+************************************************************
+
+
+
+
+
+Treat blanks as missing values (NA).
+Benefit: Missing data won't skew the analysis (e.g., averages or percentages).
+This approach is good for most survey data where "no response" indicates a lack of information.
+
+
+
+
+```{r}
+# Load required libraries
+library(readxl)
+library(dplyr)
+
+# Load PreSurvey and PostSurvey data
+pre_survey <- read_excel("Pre_Post_Survey.xlsx", sheet = "PreSurvey")
+post_survey <- read_excel("Pre_Post_Survey.xlsx", sheet = "PostSurvey")
+
+# Step 1: Replace blanks with NA
+pre_survey[pre_survey == ""] <- NA
+post_survey[post_survey == ""] <- NA
+
+# View summary of missing data
+pre_missing <- colSums(is.na(pre_survey))
+post_missing <- colSums(is.na(post_survey))
+
+print("Missing Data in PreSurvey:")
+print(pre_missing)
+
+print("Missing Data in PostSurvey:")
+print(post_missing)
+
+```
+
+```{r}
+# Load VIM library
+library(VIM)
+
+# Save Missing Data Visualization for PreSurvey
+png("Missing_Data_PreSurvey.png", width = 800, height = 600)  # Save plot as PNG
+aggr(pre_survey, col = c('navyblue', 'yellow'), numbers = TRUE, sortVars = TRUE,
+     labels = names(pre_survey), cex.axis = .7, gap = 3, 
+     ylab = c("Missing Data-Pre", "Pattern"), 
+     main = "Missing Data Visualization - PreSurvey")
+dev.off()
+
+# Save Missing Data Visualization for PostSurvey
+png("Missing_Data_PostSurvey.png", width = 800, height = 600)  # Save plot as PNG
+aggr(post_survey, col = c('navyblue', 'yellow'), numbers = TRUE, sortVars = TRUE,
+     labels = names(post_survey), cex.axis = .7, gap = 3, 
+     ylab = c("Missing Data-Post", "Pattern"), 
+     main = "Missing Data Visualization - PostSurvey")
+dev.off()
+
+
+```
+
+```{r}
+# Step 3: Identify Questions with High Missingness (> 20%) in Pre-Survey
+missing_summary_pre <- pre_data %>%
+  summarise(across(everything(), ~sum(is.na(.)))) %>%
+  pivot_longer(cols = everything(), names_to = "Question", values_to = "Missing_Count") %>%
+  mutate(Percentage_Missing = round((Missing_Count / nrow(pre_data)) * 100, 2))
+
+# Step 4: Identify Questions with High Missingness (> 20%) in Post-Survey
+missing_summary_post <- post_data %>%
+  summarise(across(everything(), ~sum(is.na(.)))) %>%
+  pivot_longer(cols = everything(), names_to = "Question", values_to = "Missing_Count") %>%
+  mutate(Percentage_Missing = round((Missing_Count / nrow(post_data)) * 100, 2))
+
+# Step 5: Combine High Missing Questions from Both Pre and Post-Surveys
+high_missing_questions_pre <- missing_summary_pre %>%
+  filter(Percentage_Missing > 20) %>%
+  pull(Question)
+
+high_missing_questions_post <- missing_summary_post %>%
+  filter(Percentage_Missing > 20) %>%
+  pull(Question)
+
+# Combine questions with high missingness in either survey
+high_missing_questions <- union(high_missing_questions_pre, high_missing_questions_post)
+
+# Print questions with high missingness
+print("Questions with High Missingness (> 20%) in Pre or Post Surveys:")
+print(high_missing_questions)
+
+# Step 6: Exclude Questions with High Missingness from Both Datasets
+pre_data_clean <- pre_data %>% select(-all_of(high_missing_questions))
+post_data_clean <- post_data %>% select(-all_of(high_missing_questions))
+
+# Print final dimensions of cleaned datasets
+cat("Pre-Survey Cleaned Data Dimensions:", dim(pre_data_clean), "\n")
+cat("Post-Survey Cleaned Data Dimensions:", dim(post_data_clean), "\n")
+
+```
+
+
+
+
+
+```{r}
+# Check dimensions of updated data
+print(dim(pre_data_clean))
+print(dim(post_data_clean))
+
+# Summarize remaining missing data
+pre_missing_summary <- colSums(is.na(pre_data_clean))
+post_missing_summary <- colSums(is.na(post_data_clean))
+
+print("Remaining Missing Data in PreSurvey:")
+print(pre_missing_summary)
+
+print("Remaining Missing Data in PostSurvey:")
+print(post_missing_summary)
+
+```
+
+
+
+
+
+
+```{r}
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+
+# Pivot PreSurvey Data to Long Format
+pre_long <- pre_data_clean %>%
+  pivot_longer(cols = -c(`First name`, `Last name`), 
+               names_to = "Question", values_to = "Response")
+
+# Pivot PostSurvey Data to Long Format
+post_long <- post_data_clean %>%
+  pivot_longer(cols = -c(`First name`, `Last name`), 
+               names_to = "Question", values_to = "Response")
+
+# Combine Pre and Post Data
+combined_data <- rbind(
+  cbind(pre_long, Survey = "PreSurvey"),
+  cbind(post_long, Survey = "PostSurvey")
+)
+
+# View Combined Data
+head(combined_data)
+```
+
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+
+# Create the plot and save it as an object
+plot <- ggplot(combined_data, aes(x = factor(Response), fill = Survey)) +
+  geom_bar(position = "dodge") +
+  facet_wrap(~ Question, scales = "free_y") +
+  labs(title = "Comparison of Pre and Post Survey Responses",
+       x = "Likert Scale", y = "Count") +
+  scale_fill_manual(values = c("PreSurvey" = "blue", "PostSurvey" = "green"))
+
+# Save the plot to a PNG file
+ggsave(filename = "Comparison_Pre_Post_Survey.png",
+       plot = plot,
+       width = 14, height = 8, dpi = 300)
+
+# Confirmation message
+print("Plot saved as 'Comparison_Pre_Post_Survey.png' in your working directory.")
+
+
+
+```
+
+
+```{r}
+# Initialize an empty list to store Wilcoxon test results
+wilcox_results <- list()
+
+# Perform the Wilcoxon signed-rank test for each question
+for (question in names(pre_data_clean)[-c(1,2)]) {  # Exclude "First name" and "Last name"
+    pre_values <- pre_data_clean[[question]]
+    post_values <- post_data_clean[[question]]
+    
+    # Perform the Wilcoxon signed-rank test (paired)
+    test_result <- wilcox.test(pre_values, post_values, paired = TRUE, na.rm = TRUE)
+    
+    # Store the p-value and test statistic
+    wilcox_results[[question]] <- list(
+        "p-value" = test_result$p.value,
+        "V" = test_result$statistic
+    )
+}
+
+# Print results for all questions
+print("Wilcoxon Signed-Rank Test Results:")
+for (question in names(wilcox_results)) {
+    cat("\nQuestion:", question, 
+        "\nP-Value:", wilcox_results[[question]]$`p-value`,
+        "\nTest Statistic (V):", wilcox_results[[question]]$V, "\n")
+}
+
+```
+
+
+```{r}
+library(ggplot2)
+
+# Prepare volcano data (already done in your previous code)
+volcano_data <- data.frame(
+  Question = names(wilcox_results),
+  P_Value = sapply(wilcox_results, function(x) x$`p-value`),
+  Test_Statistic = sapply(wilcox_results, function(x) x$V)
+)
+# Print results for all questions
+print("Wilcoxon Signed-Rank Test Results:")
+for (question in names(wilcox_results)) {
+    cat("\nQuestion:", question, 
+        "\nP-Value:", wilcox_results[[question]]$`p-value`,
+        "\nTest Statistic (V):", wilcox_results[[question]]$V, "\n")
+}
+
+# Calculate -log10(p-value) for better visualization
+volcano_data$Log_P_Value <- -log10(volcano_data$P_Value)
+
+# Create the volcano plot
+volcano_plot <- ggplot(volcano_data, aes(x = Test_Statistic, y = Log_P_Value)) +
+  geom_point(aes(color = P_Value < 0.05), size = 3) +  # Points for significance
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "red") +  # Significance threshold
+  geom_text(data = subset(volcano_data, P_Value < 0.05),  # Add labels only for significant points
+            aes(label = Question), vjust = -1, size = 3, color = "black") +
+  labs(
+    title = "Volcano Plot of Wilcoxon Signed-Rank Test Results",
+    x = "Effect Size (Test Statistic V)", 
+    y = "-log10(P-Value)"
+  ) +
+  scale_color_manual(values = c("TRUE" = "red", "FALSE" = "blue"),
+                     labels = c("Significant", "Non-Significant")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Display the plot
+print(volcano_plot)
+
+# Save the plot as a PNG file
+ggsave("volcano_plot_wilcoxon.png", plot = volcano_plot, width = 10, height = 6, dpi = 300)
+
+# Save as PDF (Optional)
+ggsave("volcano_plot_wilcoxon.pdf", plot = volcano_plot, width = 10, height = 6)
+
+```
+
+
+```{r,eval=FALSE}
+# Initialize a list to store Sign Test results
+sign_test_results <- list()
+
+# Perform the Sign Test for each question (excluding "First name" and "Last name")
+for (question in names(pre_data_clean)[-c(1, 2)]) {
+    pre_values <- pre_data_clean[[question]]
+    post_values <- post_data_clean[[question]]
+    
+    # Perform Sign Test (ignoring NAs)
+    test_result <- SIGN.test(pre_values, post_values, paired = TRUE)
+    
+    # Store the p-value and test statistic
+    sign_test_results[[question]] <- list(
+        "p-value" = test_result$p.value,
+        "S-Statistic" = test_result$statistic
+    )
+}
+
+# Filter significant questions (p < 0.05)
+significant_questions <- names(sign_test_results)[
+    sapply(sign_test_results, function(x) x$`p-value`) < 0.05
+]
+
+# Print significant questions
+cat("Significant Questions (p < 0.05):\n")
+for (question in significant_questions) {
+    cat("\nQuestion:", question,
+        "\nP-Value:", sign_test_results[[question]]$`p-value`, "\n")
+}
+
+```
+
+```{r}
+library(tidyr)
+
+# Extract theme questions
+theme_questions <- themes[["Knowledge of Creative Commons Licenses"]]
+
+# Combine Pre and Post data for these questions
+theme_data <- data.frame(
+  ID = 1:nrow(pre_data_clean),  # Add a unique ID for each row
+  PreSurvey = pre_data_clean[theme_questions],
+  PostSurvey = post_data_clean[theme_questions]
+)
+
+# Reshape to long format
+theme_data_long <- pivot_longer(
+  data = theme_data,
+  cols = starts_with("PreSurvey") | starts_with("PostSurvey"),
+  names_to = c("Survey", "Question"),
+  names_sep = "\\.",
+  values_to = "Response"
+)
+
+# Print the first few rows to confirm structure
+print(head(theme_data_long))
+
+```
+
+```{r}
+print(colnames(theme_data))
+print(head(theme_data))
+
+```
+
+```{r}
+library(ggplot2)
+
+# Create the boxplot
+thematic_1_boxplot=ggplot(theme_data_long, aes(x = Question, y = Response, fill = Survey)) +
+  geom_boxplot() +
+  labs(
+    title = "Comparison of Pre and Post Responses: Knowledge of Creative Commons Licenses",
+    x = "Question",
+    y = "Likert Scale Response"
+  ) +
+  theme_minimal() +
+  scale_fill_manual(values = c("PreSurvey" = "blue", "PostSurvey" = "green"))
+# Save the plot as a PNG file
+ggsave("Thematic_1_wilcoxon.png", plot = thematic_1_boxplot, width = 10, height = 6, dpi = 300)
+
+```
+```{r}
+wilcox.test(pre_data_clean$Q10, post_data_clean$Q10, paired = TRUE, na.rm = TRUE)
+wilcox.test(pre_data_clean$Q11, post_data_clean$Q11, paired = TRUE, na.rm = TRUE)
+wilcox.test(pre_data_clean$Q12, post_data_clean$Q12, paired = TRUE, na.rm = TRUE)
+
+```
+
+
+
+```{r}
+# Extract theme questions for Perception of OERs
+theme_questions <- c("Q6", "Q15_CCS", "Q15_FUR")
+
+# Combine Pre and Post data for these questions
+theme_data <- data.frame(
+  ID = 1:nrow(pre_data_clean),
+  PreSurvey = pre_data_clean[theme_questions],
+  PostSurvey = post_data_clean[theme_questions]
+)
+
+# Reshape data to long format
+theme_data_long <- pivot_longer(
+  data = theme_data,
+  cols = starts_with("PreSurvey") | starts_with("PostSurvey"),
+  names_to = c("Survey", "Question"),
+  names_sep = "\\.",
+  values_to = "Response"
+)
+print(theme_data_long)
+```
+
+
+```{r}
+# Plot boxplot for Perception of OERs
+thematic_2_boxplot<-ggplot(theme_data_long, aes(x = Question, y = Response, fill = Survey)) +
+  geom_boxplot() +
+  labs(
+    title = "Comparison of Pre and Post Responses: Perception of OERs",
+    x = "Question",
+    y = "Likert Scale Response"
+  ) +
+  theme_minimal() +
+  scale_fill_manual(values = c("PreSurvey" = "blue", "PostSurvey" = "green"))
+# Save the plot as a PNG file
+ggsave("Thematic_2_wilcoxon.png", plot = thematic_2_boxplot, width = 10, height = 6, dpi = 300)
+
+```
+
+
+```{r}
+questions <- c("Q6", "Q15_CCS", "Q15_FUR")
+for (question in questions) {
+  test_result <- wilcox.test(pre_data_clean[[question]], post_data_clean[[question]], 
+                             paired = TRUE, na.rm = TRUE)
+  cat("\nQuestion:", question,
+      "\nV:", test_result$statistic,
+      "\nP-Value:", test_result$p.value, "\n")
+}
+
+```
+
+
+```{r}
+# Combine Pre and Post data for Q1_b_ii
+access_data <- data.frame(
+  Survey = c(rep("PreSurvey", nrow(pre_data_clean)), rep("PostSurvey", nrow(post_data_clean))),
+  Response = c(pre_data_clean$Q1_b_ii, post_data_clean$Q1_b_ii)
+)
+
+# Print the first few rows of the data
+print(head(access_data))
+
+```
+
+
+```{r}
+library(ggplot2)
+
+# Boxplot for Access of OERs (Q1_b_ii)
+thematic_3_boxplot<-ggplot(access_data, aes(x = Survey, y = Response, fill = Survey)) +
+  geom_boxplot() +
+  labs(
+    title = "Comparison of Pre and Post Responses: Access of OERs",
+    x = "Survey",
+    y = "Likert Scale Response"
+  ) +
+  theme_minimal() +
+  scale_fill_manual(values = c("PreSurvey" = "blue", "PostSurvey" = "green"))
+# Save the plot as a PNG file
+ggsave("Thematic_3_wilcoxon.png", plot = thematic_3_boxplot, width = 10, height = 6, dpi = 300)
+
+```
+```{r}
+# Perform Wilcoxon Signed-Rank Test for Q1_b_ii
+test_result <- wilcox.test(pre_data_clean$Q1_b_ii, post_data_clean$Q1_b_ii, 
+                           paired = TRUE, na.rm = TRUE)
+
+# Print the result
+cat("Access of OERs - Q1_b_ii:\n",
+    "V:", test_result$statistic, "\n",
+    "P-Value:", test_result$p.value, "\n")
+
+```
+
+```{r}
+library(dplyr)
+
+# Define themes and associated questions
+themes <- list(
+  "Knowledge of Creative Commons Licenses" = c("Q10", "Q11", "Q12"),
+  "Perception of OERs" = c("Q6", "Q15_CCS", "Q15_FUR"),
+  "Access of OERs" = c("Q1_b_ii")
+)
+
+# Summarize data for each theme
+theme_summary <- lapply(names(themes), function(theme) {
+  questions <- themes[[theme]]
+  
+  # Extract Pre and Post responses for the theme
+  pre_responses <- pre_data_clean[questions]
+  post_responses <- post_data_clean[questions]
+  
+  # Calculate median and IQR for Pre and Post
+  pre_summary <- pre_responses %>%
+    summarise(across(everything(), list(Median = ~median(., na.rm = TRUE),
+                                        IQR = ~IQR(., na.rm = TRUE))))
+  
+  post_summary <- post_responses %>%
+    summarise(across(everything(), list(Median = ~median(., na.rm = TRUE),
+                                        IQR = ~IQR(., na.rm = TRUE))))
+  
+  list(
+    Theme = theme,
+    PreSummary = pre_summary,
+    PostSummary = post_summary
+  )
+})
+
+# Print summaries for each theme
+for (summary in theme_summary) {
+  cat("\nTheme:", summary$Theme, "\n")
+  cat("PreSurvey Summary:\n")
+  print(summary$PreSummary)
+  cat("\nPostSurvey Summary:\n")
+  print(summary$PostSummary)
+}
+
+```
+
+
+
+
+```{r}
+colnames(pre_data_clean)
+
+```
