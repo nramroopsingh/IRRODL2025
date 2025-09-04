@@ -1,3 +1,21 @@
+# From Consumers to Creators: Undergraduate-Created OERs
+
+**Authors:** Natasha et al.  
+**Date:** 2025-09-03 
+
+> A pre–post activity study (n = 57) in an advanced biochemistry course evaluating whether creating OER improves **Creative Commons knowledge**, **perceptions of OER**, and **ability to access OER**.
+
+---
+
+## 🔎 Abstract
+
+Open Educational Resources (OER) are growing across Canadian institutions. We assess whether involving undergraduates in **creating** OER improves (1) understanding of open licensing, (2) perceptions of OER credibility/utility, and (3) independent access behaviors. Using structured pre/post surveys and the **Wilcoxon Signed-Rank Test**, we observe significant gains in open-licensing knowledge (p < 0.001), credibility perceptions (p = 0.0049), and modest improvements in access behaviors (p = 0.0397). Thematic analyses reinforce these gains and point to needed institutional scaffolding for access.
+
+---
+
+## 🗂️ Repository Structure
+
+```text
 .
 ├─ data/
 │  └─ Pre_Post_Survey.xlsx         # Sheets: "PreSurvey", "PostSurvey"
